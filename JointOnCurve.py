@@ -45,6 +45,8 @@ def pivotToComponent(driver, driven):
 
 # Generate mouth 
 def Mouth():
+    #region
+    
     # look for a cleanup folder to delete
     try:
         pmc.delete("cleanup")
@@ -102,6 +104,9 @@ def Mouth():
     # this function makes the bshpDrivers, drivers
     # cuts bshpDrivers and reorients them
     # makes spaceLocators that will be used to drive the ccs down the road
+
+    #endregion
+    
     def makeDrivers(top, bottom):
         driverLocs = pmc.group(em=1, n="grpLoc_driverCurve_mouth01")
         pmc.parent(driverLocs, locators)
@@ -169,7 +174,7 @@ def Mouth():
                 pmc.setAttr(str(locAlign) + ".localScale", (0.4, 0.4, 0.4))
                 pmc.parent(locAlign, locators)
 
-    # 
+    
     def makeShapeClusters():
         # access 4 bshp curves
         bl, br, tl, tr = pmc.ls("bshpDriver*01", flatten=1, type="transform")
@@ -233,6 +238,10 @@ def Mouth():
                 cvs,
                 ("clusterDriver_mouth" + name + "_smile01"),
             )
+            if name[1] == "R":
+                pmc.transformLimits(cluster[1], tx = (0, 0), etx =(1,0))
+            else :
+                pmc.transformLimits(cluster[1], tx = (0, 0), etx =(0,1))
             # loosely exponential increase in weight transformed to [0-1] space
             for index, cv in enumerate(cvs):
                 pmc.percent(
@@ -240,19 +249,16 @@ def Mouth():
                     cv,
                     v=(round(((float(len(cvs)) - index) ** 3) / (len(cvs) ** 3), 4)),
                 )
+
             # for index, cv in enumerate(cvs):
             pmc.parent(grp, clusters)
-        # redundant?
-        def makeFrown():
-            return
+
 
         # for all 4 curves, create clusters
         for xy in zip([tr, tl, br, bl], ["TR", "TL", "BR", "BL"], [-1, -1, 1, 1]):
             makeSmile(xy[0], xy[1])
             makeOpen(xy[0], xy[1], xy[2])
             makePurse(xy[0], xy[1])
-
-        # pmc.select(clusterOpen)
 
     # core of the rig happens here
     # iterate over curves top/bottom
@@ -423,6 +429,7 @@ def Mouth():
     # accept top:[l, r], bottom:[l, r]
     # Corners on the mouth rig need special care, so ive put in a custom function to handle them
     def handleCorners(top, bottom):
+       
         # utility that will run for each corner with a new name
         def abstract(corner):
             # naming dictionary
@@ -525,13 +532,7 @@ def Mouth():
                     pmc.parent(ccL, ccsRight)
                     pmc.makeIdentity(ccL, apply=1, t=1, r=1, s=1)
                     pmc.connectAttr(str(mult) + ".output", str(clus) + ".t", f=1)
-                    # cornerDrivers = pmc.ls("locAlign_mouthDriver_*_R_corner01")
-                    # ----------------------------------------------------------------------------------------------------------------------------------------
-                    # around here is where we introduce the double transfomrmation
-                    # parent = pmc.parentConstraint(cornerDrivers, ccsRight, mo = 1)
                 else:
-                    # cornerDrivers = pmc.ls("locAlign_mouthDriver_*_L_corner01")
-                    # parent = pmc.parentConstraint(cornerDrivers, ccsLeft, mo = 1)
                     pmc.connectAttr(str(ccL) + ".translate", str(clus) + ".translate")
                     pmc.parent(ccL, ccsLeft)
 
@@ -542,9 +543,77 @@ def Mouth():
             # this mimics the corner CC being driven by the opening
             pmc.orientConstraint(pmc.ls("ccs_mouth01"),pmc.ls("locAlign_jaw_openDriver01"), pmc.ls(target), mo=1  )
 
+            # Next we need to bind translate z on the ccs to flatten the bshp curves
+            [bottomBshp, topBshp] = pmc.ls("bshpDriver_mouth_*"+ name.upper() + "*01", type = "transform")
+
+
+            # Set key on anim_corner tz to contorl flatten of bshp
+            locTemp = pmc.spaceLocator(n = "temp01")
+            pmc.pointConstraint(bottomBshp, locTemp)
+            pmc.parent(locTemp, cleanup)
+
+            [cx, cy, cz]  = pmc.xform(ccL, ws=1, q=1, rp=1)
+            [lx, ly, lz] = pmc.xform(locTemp, ws=1, q=1, rp=1)
+            pmc.delete(locTemp)
+            # set Keys to control Purse
+            # Make keys
+            pmc.setDrivenKeyframe( str(topBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
+            pmc.setDrivenKeyframe( str(bottomBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
+            pmc.move(0, 0, lz-cz, ccL, ws = 1)
+            pmc.scale([str(topBshp), str(bottomBshp)],[1,1,0], r=1)
+            pmc.setDrivenKeyframe( str(topBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
+            pmc.setDrivenKeyframe( str(bottomBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
+            # set interp to linear, and set infinity to linear
+            pmc.select(bottomBshp)
+            pmc.selectKey(str(bottomBshp), attribute = 
+            'scaleZ', add = 1, k=1 , time = 0)
+            pmc.keyTangent(itt="linear", ott="linear")
+            pmc.setInfinity(poi="linear")
+            pmc.select(cl=1)
+            pmc.select(topBshp)
+            pmc.selectKey(str(bottomBshp), attribute = 
+            'scaleZ', add = 1, k=1 , time =(-10,0))
+            pmc.keyTangent(itt="linear", ott="linear")
+            pmc.setInfinity(poi="linear")
+            
+            pmc.move(0, 0, 0, ccL, ws = 1)
+            # set Keys to control corner Inward
+            # Make keys
+            pmc.setDrivenKeyframe( str(topBshp) + ".scaleX",cd = str(ccL) + ".translateX" )
+            pmc.setDrivenKeyframe( str(bottomBshp) + ".scaleX",cd = str(ccL) + ".translateX" )
+            pmc.xform(ccL, t=(-cx, 0,0),ws=1)
+            pmc.scale([str(topBshp), str(bottomBshp)],[0,1,1], r=1)
+            pmc.setDrivenKeyframe( str(topBshp) + ".scaleX",cd = str(ccL) + ".translateX" )
+            pmc.setDrivenKeyframe( str(bottomBshp) + ".scaleX",cd = str(ccL) + ".translateX" )
+            # set interp to linear, and set infinity to linear
+            pmc.select(bottomBshp)
+            pmc.selectKey(str(bottomBshp), attribute = 
+            'translateZ', add = 1, k=1 , time = 0)
+            pmc.keyTangent(itt="linear", ott="linear")
+            pmc.setInfinity(poi="linear")
+            pmc.select(cl=1)
+            pmc.select(topBshp)
+            pmc.selectKey(str(bottomBshp), attribute = 
+            'translateZ', add = 1, k=1 , time =(-10,0))
+            pmc.keyTangent(itt="linear", ott="linear")
+            pmc.setInfinity(poi="linear")
+            
+            pmc.move(0, 0, 0, ccL, ws = 1)
+
+            pmc.select(cl=1)
+
+            pmc.select(ccL)
+            pmc.addAttr( longName='Purse', defaultValue=1.0, minValue=0, maxValue=1 )
+            pmc.setAttr(str(ccL) + ".Purse",e=1, k=1)
+            pmc.transformLimits(ccL, tz = (lz, 0), etz =(1,1))
+
+
+
 
         abstract("r")
         abstract("l")
+
+
 
 
     #handles the opening of the mouth
@@ -629,4 +698,4 @@ end = time.time()
 
 #Subtract Start Time from The End Time
 total_time = end - start
-print("\n"+ str(total_time))
+print("\n"+ str(total_time) + "total run time")
