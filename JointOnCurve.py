@@ -2,11 +2,18 @@ from os import stat
 import pymel.core as pmc
 import re
 import math
+import time
+
+# Grab Currrent Time Before Running the Code
+start = time.time()
+
 
 # The intention of this script is to automate the generation of a Joint on curve rig
 # Still in alpha stages
 
 # Needs in the world scene:
+# joint: "driver_jawPivot"
+#   aligns with the jaw pivot on the rig
 # nurbsCvs x2: "driver_top, driver_bottom", scene left to right
 #   this will align with the the verts on the edge loop for the mouth/eyelid openning
 # spaceLocator: "driver_pivot" 
@@ -16,14 +23,9 @@ import math
 
 # ------------------------------------------------------------------------------------------------------------------------------
 # TODO
-# as of right now, we get a double transformation on the mouth corner cluster
-# driver curve currently deforms the ccs, including the corner, but also is deformed in turn by the corner
-# propose: connect cc.t * .5  -> cornerCLuster.t
-
 # Handle z translation mouthwide/individual
-    # flatten is set up on the ccs side, need to teach the parent joints how to scale 
+# flatten is set up on the ccs side, need to teach the parent joints how to scale 
 # axis agnostic
-# verify global move/scale works
 # ------------------------------------------------------------------------------------------------------------------------------
 
 # Utility function, extracts component number from name
@@ -35,6 +37,11 @@ def xtractNumber(str):
 # Utility function calculates 2d euclidean distance
 def euclidean_distance(x, y):
     return math.sqrt(sum((px - py) ** 2 for px, py in zip(x, y)))
+
+def pivotToComponent(driver, driven):
+            [x,y,z] = pmc.xform(str(driver), ws=1, q=1, t=1)
+            pmc.move(x,y,z,str(driven) + ".scalePivot",str(driven) + ".rotatePivot",rpr=1,a=1,)
+
 
 # Generate mouth 
 def Mouth():
@@ -54,6 +61,7 @@ def Mouth():
 
     # moveable
     translate = pmc.group(empty=True, name="grpTranslate_mouthRig01")
+    jointsOffset = pmc.group(empty=True, name="joints_offset_mouth01")
     joints = pmc.group(empty=True, name="joints_mouth01")
 
     ccs = pmc.group(empty=True, name="ccs_mouth01")
@@ -70,16 +78,24 @@ def Mouth():
     pmc.parent([translate, static], cleanup)
     pmc.parent([locators, clusters], static)
     pmc.parent([ccsLeft, ccsRight], ccs)
-    pmc.parent([ccs, joints], translate)
+    pmc.parent(joints, jointsOffset)
+    pmc.parent([ccs, jointsOffset], translate)
     # end group hierarchy setup
 
+
     # grab drivers by name
-    top, bottom, pivot = pmc.ls("driver_top", "driver_bottom", "driver_pivot")
+    top, bottom, pivot, jaw = pmc.ls("driver_top", "driver_bottom", "driver_pivot", "driver_jawPivot")
     pmc.select(cl=1)
     pivotJoint = pmc.joint(
         n="jtAlign_mouthPivot_01", p=pmc.pointPosition(pivot), radius=0.5
     )
     pmc.parent(pivotJoint, joints)
+
+    #Simulate mouth joints being half moved down when mouth opens 
+    pivotToComponent(jaw, joints)
+    pivotToComponent(jaw, jointsOffset)
+
+    # pmc.orientConstraint(joints)
 
     # generate driver curves that deform ccs and main curve
     # weve crrently got bshpDrivers --> drivers --> loc --> ccs --> curve --> joints
@@ -162,12 +178,10 @@ def Mouth():
             [bl, br, tl, tr],
             ("clusterDriver_mouth_open01"),
         )
-        # pmc.select(clusterOpen)
 
         # subroutine to set the cluster weights for opening the mouth using clusterOPen
         def makeOpen(curve, name, offset):
             cvs = pmc.ls(str(curve) + ".cv[*]", flatten=1)
-
             # currently using pythag derivative to graph a circle for the weights in [0-1] space
             # index 0 == weight 0
             # index len(cvs) == 1
@@ -327,7 +341,7 @@ def Mouth():
                 # aim parent joint at the locator on the curve meant to drive if
                 pmc.aimConstraint(locAlignPos, jtOri)
                 pmc.parent(bindJt, jtOri)
-                pmc.parent(jtOri, joints)
+                pmc.parent(jtOri, pivotJoint)
                 pmc.parent(locAlignNeg, locAlignPos, locators)
 
         return ret
@@ -392,7 +406,6 @@ def Mouth():
             # select the spaceLocator that will drive the cc
             target = pmc.ls("locAlign_mouthDriver" + name + "_" + str(index + 1))[0]
             if index < len(curvesCvs) / 2:
-    # -----------------------------------------------------------------------------------------------------------------------------------------------------------
                 # consider refactoring to parent constraint instead of parent, to keep the ccs in hierarchy instead of in locators
                 # pmc.parent(cc, pmc.ls("ccs_mouthL01")[0])
                 pmc.parent(grpOri, target)
@@ -458,7 +471,7 @@ def Mouth():
             pmc.aimConstraint(top[loc], bottom[loc], jtOriL)
             pmc.parent(cornerJoint, jtOriL)
 
-            pmc.parent(jtOriL, joints)
+            pmc.parent(jtOriL, pivotJoint)
             # make cc
             ccL = pmc.circle(
                 n="anim_" + name + "_mouthCorner01",
@@ -499,7 +512,6 @@ def Mouth():
             smileClusters = pmc.ls("*" + corner.upper() + "_smile*Handle", flatten=1)
             # for each of the 2 smileClusters
             for index, clus in enumerate(smileClusters):
-                parent = ""
                 # if corner == r, mirror 
                 if corner == "r":
                     # create a multiply divide node to flip tX
@@ -513,23 +525,60 @@ def Mouth():
                     pmc.parent(ccL, ccsRight)
                     pmc.makeIdentity(ccL, apply=1, t=1, r=1, s=1)
                     pmc.connectAttr(str(mult) + ".output", str(clus) + ".t", f=1)
-                    cornerDrivers = pmc.ls("locAlign_mouthDriver_*_R_corner01")
+                    # cornerDrivers = pmc.ls("locAlign_mouthDriver_*_R_corner01")
                     # ----------------------------------------------------------------------------------------------------------------------------------------
                     # around here is where we introduce the double transfomrmation
-                    parent = pmc.parentConstraint(cornerDrivers, ccsRight, mo = 1)
+                    # parent = pmc.parentConstraint(cornerDrivers, ccsRight, mo = 1)
                 else:
-                    cornerDrivers = pmc.ls("locAlign_mouthDriver_*_L_corner01")
-                    # pmc.parentConstraint(cornerDrivers, ccL)
-                    parent = pmc.parentConstraint(cornerDrivers, ccsLeft, mo = 1)
+                    # cornerDrivers = pmc.ls("locAlign_mouthDriver_*_L_corner01")
+                    # parent = pmc.parentConstraint(cornerDrivers, ccsLeft, mo = 1)
                     pmc.connectAttr(str(ccL) + ".translate", str(clus) + ".translate")
                     pmc.parent(ccL, ccsLeft)
-            pmc.setAttr(str(parent) + ".interpType", 2)
-            # pmc.parentConstraint(ccL, grp, mo=1)
-            # print(grp, ccL)
+
+            # pin the cc parent group's pivot to the jaw pivot
+            pivotToComponent(jaw, target)
+
+            # orient the cc's parent to the jaw
+            # this mimics the corner CC being driven by the opening
+            pmc.orientConstraint(pmc.ls("ccs_mouth01"),pmc.ls("locAlign_jaw_openDriver01"), pmc.ls(target), mo=1  )
+
 
         abstract("r")
         abstract("l")
-    
+
+
+    #handles the opening of the mouth
+    #creates a public locator that will be left to tie into the rig
+    # this locator drives the  root of the joints
+    # and the open mouth cluster
+    # ----------------------------------------------------------------------------------------
+    # TODO: sort double rotation issue on world move, and finalize feature
+    def bindOpening():
+        # the corner ccs currently live on their own
+        # they deform the rig, but are not driven by the open cluster
+        [x,y,z] = pmc.xform(jaw, ws=1, q=1, t=1)
+        # this creates the locator that will be left client facing to integrate into the rig
+        publicJaw = pmc.spaceLocator(n = "locAlign_jaw_openDriver01", p=[x,y,z])
+        pmc.xform(publicJaw, cp=1)
+        openCluster = pmc.ls('clusterDriver_mouth_open01Handle')[0]
+        pmc.parent(publicJaw, translate)
+        # orient the locator to the cluster
+        temp = pmc.orientConstraint(openCluster, publicJaw)
+        pmc.delete(temp)
+        # center pivots
+        pmc.move(
+            x,y,z,
+            str(openCluster) + ".scalePivot",
+            str(openCluster) + ".rotatePivot",
+            rpr=1,
+            a=1,
+        )
+        # finally, connect the roation of the locator to the rotation of the cluster
+        pmc.connectAttr(str(publicJaw) + '.r' , str(openCluster) + '.r')
+        # next bing the root joint of the mouth to follow the opening cluster
+        pmc.orientConstraint(jointsOffset, publicJaw, joints)
+        # pmc.parentConstraint(joints, openCluster, pivotJoint, mo=1 )
+
     # Alpha, this runs the calculations to figure out how far a parent joint needs to scale to be at the same point as a cv
     # This will have to be strung into a node chain to dynamically scale down the road 
     def handleZ():
@@ -564,12 +613,20 @@ def Mouth():
     ccGenerator(top, "_top")
     ccGenerator(bottom, "_bottom")
 
+    bindOpening()
     handleCorners(topCorners, bottomCorners)
-    pmc.select("clusterDriver_mouth_open01Handle")
 
     # handleZ()
 
     print("Mouth Complete")
+    
+
 
 
 Mouth()
+# Grab Currrent Time After Running the Code
+end = time.time()
+
+#Subtract Start Time from The End Time
+total_time = end - start
+print("\n"+ str(total_time))
