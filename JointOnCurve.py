@@ -614,14 +614,10 @@ def Mouth():
         abstract("l")
 
 
-
-
     #handles the opening of the mouth
     #creates a public locator that will be left to tie into the rig
     # this locator drives the  root of the joints
     # and the open mouth cluster
-    # ----------------------------------------------------------------------------------------
-    # TODO: sort double rotation issue on world move, and finalize feature
     def bindOpening():
         # the corner ccs currently live on their own
         # they deform the rig, but are not driven by the open cluster
@@ -646,8 +642,46 @@ def Mouth():
         pmc.connectAttr(str(publicJaw) + '.r' , str(openCluster) + '.r')
         # next bing the root joint of the mouth to follow the opening cluster
         pmc.orientConstraint(jointsOffset, publicJaw, joints)
-        # pmc.parentConstraint(joints, openCluster, pivotJoint, mo=1 )
 
+    def connectZScale(child, parent, target, purse):
+        target = pmc.ls(target)[0]
+
+        print(target)
+        # dist between and joint and locator
+        def abs(joint, locator,name,  subNode = False) :
+            pMM = pmc.createNode("pointMatrixMult", n = "pmm_" + name + str(locator))
+            pmc.connectAttr(str(joint)+".translate", pMM + ".inPoint",)
+            pmc.connectAttr(str(joint)+".parentMatrix", pMM + ".inMatrix",)
+            distNode = pmc.shadingNode('distanceBetween', au = 1, n = "dist_" + name+ str(locator))
+            pmc.connectAttr(str(pMM)+".output", str(distNode) + ".point2", )
+            if(subNode == False):
+                subNode = pmc.shadingNode('plusMinusAverage', au = 1, n = "sub_" + name+ str(locator))
+            pmc.connectAttr(str(distNode)+".distance", str(subNode) + (".input1D[0]" if name == "parent_" else ".input1D[1]"), f=1)
+            pmc.connectAttr(str(locator)+".worldPosition[0]", str(distNode) + ".point1")
+            pmc.setAttr(str(subNode) + ".operation", 2)
+            return subNode
+        # connect the parent->target output on 1X
+        subNodePassover = abs(parent, target, "parent_")
+        abs(child, target,'child_', subNodePassover)
+
+        [childD, parentD] = pmc.ls("dist*" + str(target))
+        divA = pmc.shadingNode('multiplyDivide', au = 1, n = "divA_" + str(target))
+        divA.attr('operation').set(2)
+        divA.attr("input2X").set(1)
+        pmc.connectAttr(str(childD)+'.distance', str(divA) + ".input1X")
+        pmc.select([divA, child, parent])
+        multA = pmc.shadingNode('multiplyDivide', au = 1, n = "multA_" + str(target))
+        multB = pmc.shadingNode('multiplyDivide', au = 1, n = "multB_" + str(target))
+        addA = pmc.shadingNode('plusMinusAverage', au = 1, n = "a_" + str(target))
+        pmc.connectAttr(str(divA)+'.outputX' ,str(multA) + ".input1X")
+        pmc.connectAttr(str(subNodePassover)+'.output1D' ,str(multA) + ".input2X")
+        pmc.connectAttr(str(multA)+'.outputX' ,str(multB) + ".input1X")
+        pmc.connectAttr(str(purse)+'.Purse' ,str(multB) + ".input2X")
+        pmc.connectAttr(str(multB) + '.outputX', str(addA)+ ".input1D[0]")
+        addA.attr('input1D[1]').set(1)
+        pmc.select(addA)
+        
+    
     # Alpha, this runs the calculations to figure out how far a parent joint needs to scale to be at the same point as a cv
     # This will have to be strung into a node chain to dynamically scale down the road 
     def handleZ():
@@ -656,20 +690,22 @@ def Mouth():
             bindJts, reverse=1, key=lambda x: pmc.xform(x, ws=1, q=1, t=1)[2]
         )
         tZ = pmc.xform(bindHighest[0], ws=1, q=1, t=1)[2]
-        for index, joint in enumerate(bindJts[-1:]):
-            tX = pmc.xform(joint, ws=1, q=1, t=1)[1]
-            parent = []
+        for index, joint in enumerate(bindJts[0:1]):
+            # locAlign_mouthDriver_top_1
+            # locAlign_mouthDriver_top_L_corner01
+            target = ''
+            if(index == 0 or index == len(bindJts)-1):
+                side = re.findall(r"bind_(\w)_mouthCorner", str(joint))[0]
+                target = "locAlign_mouthDriver_top_"+side.upper()+"_corner01"
+            else:
+                target = "locAlign_mouthDriver_"+ re.findall(r'bind_mouth_(\w+_\d+)', str(joint))[0]
+
             pmc.select(joint)
-            parent = pmc.pickWalk(direction="up")
-            [pX, pY, pZ] = pmc.xform(parent[0], ws=1, q=1, t=1)
-            [cX, cY, cZ] = pmc.xform(joint, ws=1, q=1, t=1)
-            parent = [round(pX, 5), round(pZ, 5)]
-            child = [round(cX, 5), round(cZ, 5)]
-            target = [round(cX, 5), round(tZ, 5)]
-            cP = euclidean_distance(child, parent)
-            tP = euclidean_distance(target, parent)
-            ratio = (1 / cP) * tP
-            # distB = math.dist(target, [])
+            parent = pmc.pickWalk(direction="up")[0]
+            # anim_l_mouthCorner01
+            # anim_r_mouthCorner01
+            purse = 'anim_r_mouthCorner01' if index < len(bindJts)/2 else "anim_l_mouthCorner01"
+            connectZScale(joint, parent, target, purse)
 
 
 
@@ -685,7 +721,7 @@ def Mouth():
     bindOpening()
     handleCorners(topCorners, bottomCorners)
 
-    # handleZ()
+    handleZ()
 
     print("Mouth Complete")
     
