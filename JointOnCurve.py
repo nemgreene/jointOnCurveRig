@@ -558,7 +558,7 @@ def Mouth():
             # set Keys to control Purse
             pmc.select(ccL)
             pmc.addAttr( longName='Purse', defaultValue=1.0, minValue=0, maxValue=1, h=0, k=1, r=1, w=1 )
-            ccL.attr('Purse').set(1)
+            ccL.attr('Purse').set(0)
             pmc.transformLimits(ccL, tz = (lz, 0), etz =(1,1))
 
             # Make keys
@@ -696,10 +696,9 @@ def Mouth():
     # This will have to be strung into a node chain to dynamically scale down the road 
     def handleZ():
         bindJts = pmc.ls("bind*_mouth*", flatten=1, type="joint")
-        bindHighest = sorted(
-            bindJts, reverse=1, key=lambda x: pmc.xform(x, ws=1, q=1, t=1)[2]
-        )
-        tZ = pmc.xform(bindHighest[0], ws=1, q=1, t=1)[2]
+        # bindHighest = sorted(
+        #     bindJts, reverse=1, key=lambda x: pmc.xform(x, ws=1, q=1, t=1)[2]
+        # )
         for index, joint in enumerate(bindJts):
             # locAlign_mouthDriver_top_1
             # locAlign_mouthDriver_top_L_corner01
