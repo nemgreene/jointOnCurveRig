@@ -556,6 +556,11 @@ def Mouth():
             [lx, ly, lz] = pmc.xform(locTemp, ws=1, q=1, rp=1)
             pmc.delete(locTemp)
             # set Keys to control Purse
+            pmc.select(ccL)
+            pmc.addAttr( longName='Purse', defaultValue=1.0, minValue=0, maxValue=1, h=0, k=1, r=1, w=1 )
+            ccL.attr('Purse').set(1)
+            pmc.transformLimits(ccL, tz = (lz, 0), etz =(1,1))
+
             # Make keys
             pmc.setDrivenKeyframe( str(topBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
             pmc.setDrivenKeyframe( str(bottomBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
@@ -564,16 +569,23 @@ def Mouth():
             pmc.setDrivenKeyframe( str(topBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
             pmc.setDrivenKeyframe( str(bottomBshp) + ".scaleZ",cd = str(ccL) + ".translateZ" )
             # set interp to linear, and set infinity to linear
+            
+            
             pmc.select(bottomBshp)
-            pmc.selectKey(str(bottomBshp), attribute = 
-            'scaleZ', add = 1, k=1 , time = 0)
-            pmc.keyTangent(itt="linear", ott="linear")
+            pmc.selectKey( str(bottomBshp), time=(lz-cz), attribute='scaleZ') 
             pmc.setInfinity(poi="linear")
-            pmc.select(cl=1)
+            pmc.keyTangent(outAngle="3.5")
+            pmc.selectKey( str(bottomBshp), time=(0), attribute='scaleZ') 
+            pmc.keyTangent(itt="flat")
+            pmc.setInfinity(poi="linear")
+
+
             pmc.select(topBshp)
-            pmc.selectKey(str(bottomBshp), attribute = 
-            'scaleZ', add = 1, k=1 , time =(-10,0))
-            pmc.keyTangent(itt="linear", ott="linear")
+            pmc.selectKey( str(topBshp), time=(lz-cz), attribute='scaleZ') 
+            pmc.setInfinity(poi="linear")
+            pmc.keyTangent(outAngle="3.5")
+            pmc.selectKey( str(topBshp), time=(0), attribute='scaleZ') 
+            pmc.keyTangent(itt="flat")
             pmc.setInfinity(poi="linear")
             
             pmc.move(0, 0, 0, ccL, ws = 1)
@@ -586,26 +598,21 @@ def Mouth():
             pmc.setDrivenKeyframe( str(topBshp) + ".scaleX",cd = str(ccL) + ".translateX" )
             pmc.setDrivenKeyframe( str(bottomBshp) + ".scaleX",cd = str(ccL) + ".translateX" )
             # set interp to linear, and set infinity to linear
-            pmc.select(bottomBshp)
-            pmc.selectKey(str(bottomBshp), attribute = 
-            'translateZ', add = 1, k=1 , time = 0)
-            pmc.keyTangent(itt="linear", ott="linear")
-            pmc.setInfinity(poi="linear")
             pmc.select(cl=1)
-            pmc.select(topBshp)
             pmc.selectKey(str(bottomBshp), attribute = 
-            'translateZ', add = 1, k=1 , time =(-10,0))
+            'scaleX',  k=1 )
+            pmc.selectKey(str(topBshp), add=1, attribute = 
+            'scaleX',  k=1 )
             pmc.keyTangent(itt="linear", ott="linear")
-            pmc.setInfinity(poi="linear")
+            # pmc.setInfinity(poi="linear")
+            # pmc.select(cl=1)
+            # pmc.keyTangent(itt="linear", ott="linear")
+            # pmc.setInfinity(poi="linear")
             
             pmc.move(0, 0, 0, ccL, ws = 1)
 
-            pmc.select(cl=1)
+            pmc.select(topBshp, bottomBshp)
 
-            pmc.select(ccL)
-            pmc.addAttr( longName='Purse', defaultValue=1.0, minValue=0, maxValue=1 )
-            pmc.setAttr(str(ccL) + ".Purse",e=1, k=1)
-            pmc.transformLimits(ccL, tz = (lz, 0), etz =(1,1))
 
 
 
@@ -646,9 +653,8 @@ def Mouth():
     def connectZScale(child, parent, target, purse):
         target = pmc.ls(target)[0]
 
-        print(target)
         # dist between and joint and locator
-        def abs(joint, locator,name,  subNode = False) :
+        def abs(joint, locator,name,  subNode = False, parentPmm = False) :
             pMM = pmc.createNode("pointMatrixMult", n = "pmm_" + name + str(locator))
             pmc.connectAttr(str(joint)+".translate", pMM + ".inPoint",)
             pmc.connectAttr(str(joint)+".parentMatrix", pMM + ".inMatrix",)
@@ -656,30 +662,34 @@ def Mouth():
             pmc.connectAttr(str(pMM)+".output", str(distNode) + ".point2", )
             if(subNode == False):
                 subNode = pmc.shadingNode('plusMinusAverage', au = 1, n = "sub_" + name+ str(locator))
-            pmc.connectAttr(str(distNode)+".distance", str(subNode) + (".input1D[0]" if name == "parent_" else ".input1D[1]"), f=1)
-            pmc.connectAttr(str(locator)+".worldPosition[0]", str(distNode) + ".point1")
+                pmc.connectAttr(str(distNode)+".distance", str(subNode) + (".input1D[0]" if name == "parent_" else ".input1D[1]"), f=1)
+            if(parentPmm == False):
+                pmc.connectAttr(str(locator)+".worldPosition[0]", str(distNode) + ".point1")
+            else:
+                pmc.connectAttr(str(parentPmm) + '.output', str(distNode) + '.point1')
+
             pmc.setAttr(str(subNode) + ".operation", 2)
-            return subNode
+            return subNode, pMM
         # connect the parent->target output on 1X
-        subNodePassover = abs(parent, target, "parent_")
-        abs(child, target,'child_', subNodePassover)
+        [subNodePassover, pMM] = abs(parent, target, "parent_")
+        abs(child, target,'child_', subNodePassover, pMM)
 
         [childD, parentD] = pmc.ls("dist*" + str(target))
         divA = pmc.shadingNode('multiplyDivide', au = 1, n = "divA_" + str(target))
         divA.attr('operation').set(2)
-        divA.attr("input2X").set(1)
-        pmc.connectAttr(str(childD)+'.distance', str(divA) + ".input1X")
-        pmc.select([divA, child, parent])
-        multA = pmc.shadingNode('multiplyDivide', au = 1, n = "multA_" + str(target))
+        divA.attr("input2X").set(float(childD.getAttr("distance")))
+        subNodePassover.attr("input1D[1]").set(float(childD.getAttr("distance")))
+
         multB = pmc.shadingNode('multiplyDivide', au = 1, n = "multB_" + str(target))
         addA = pmc.shadingNode('plusMinusAverage', au = 1, n = "a_" + str(target))
-        pmc.connectAttr(str(divA)+'.outputX' ,str(multA) + ".input1X")
-        pmc.connectAttr(str(subNodePassover)+'.output1D' ,str(multA) + ".input2X")
-        pmc.connectAttr(str(multA)+'.outputX' ,str(multB) + ".input1X")
+        pmc.connectAttr(str(subNodePassover)+'.output1D' ,str(divA) + ".input1X")
+        pmc.connectAttr(str(divA)+'.outputX' ,str(multB) + ".input1X")
         pmc.connectAttr(str(purse)+'.Purse' ,str(multB) + ".input2X")
         pmc.connectAttr(str(multB) + '.outputX', str(addA)+ ".input1D[0]")
         addA.attr('input1D[1]').set(1)
-        pmc.select(addA)
+        pmc.delete(childD)
+
+        pmc.connectAttr( str(addA) + ".output1D" ,str(parent)+".scaleX")
         
     
     # Alpha, this runs the calculations to figure out how far a parent joint needs to scale to be at the same point as a cv
@@ -690,7 +700,7 @@ def Mouth():
             bindJts, reverse=1, key=lambda x: pmc.xform(x, ws=1, q=1, t=1)[2]
         )
         tZ = pmc.xform(bindHighest[0], ws=1, q=1, t=1)[2]
-        for index, joint in enumerate(bindJts[0:1]):
+        for index, joint in enumerate(bindJts):
             # locAlign_mouthDriver_top_1
             # locAlign_mouthDriver_top_L_corner01
             target = ''
@@ -704,8 +714,10 @@ def Mouth():
             parent = pmc.pickWalk(direction="up")[0]
             # anim_l_mouthCorner01
             # anim_r_mouthCorner01
-            purse = 'anim_r_mouthCorner01' if index < len(bindJts)/2 else "anim_l_mouthCorner01"
+            [lx, ly, lz] = pmc.xform(joint, q=1,t=1,  ws=1)
+            purse = 'anim_r_mouthCorner01' if lx >= 0 else "anim_l_mouthCorner01"
             connectZScale(joint, parent, target, purse)
+            
 
 
 
@@ -722,6 +734,7 @@ def Mouth():
     handleCorners(topCorners, bottomCorners)
 
     handleZ()
+
 
     print("Mouth Complete")
     
