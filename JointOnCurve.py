@@ -14,7 +14,8 @@ start = time.time()
 # Needs in the world scene:
 # joint: "driver_jawPivot"
 #   aligns with the jaw pivot on the rig
-# nurbsCvs x2: "driver_top, driver_bottom", scene left to right
+# nurbsCvs x2: "driver_top, driver_bottom", -x to +X
+#   char should be facing -z
 #   this will align with the the verts on the edge loop for the mouth/eyelid openning
 # spaceLocator: "driver_pivot" 
 #   the premise of the rig rotates around a single pivot to replicate the volume of the muzzle/eyeball
@@ -169,7 +170,7 @@ def Mouth():
                     nameIndex = str(idx)
                 locAlign = pmc.spaceLocator(n="locAlign_mouthDriver_" + y + nameIndex)
                 pmc.setAttr(str(locAlign) + "Shape.visibility", 0)
-                animPos = pmc.pathAnimation(locAlign, c=driver[0], f=1)
+                animPos = pmc.pathAnimation(locAlign, c=driver[0], f=0)
                 pmc.disconnectAttr(str(animPos) + ".uValue")
                 pmc.setAttr(str(animPos) + ".uValue", idx)
                 pmc.setAttr(str(locAlign) + ".localScale", (0.4, 0.4, 0.4))
@@ -239,10 +240,6 @@ def Mouth():
                 cvs,
                 ("clusterDriver_mouth" + name + "_smile01"),
             )
-            if name[1] == "R":
-                pmc.transformLimits(cluster[1], tx = (0, 0), etx =(1,0))
-            else :
-                pmc.transformLimits(cluster[1], tx = (0, 0), etx =(0,1))
             # loosely exponential increase in weight transformed to [0-1] space
             for index, cv in enumerate(cvs):
                 pmc.percent(
@@ -250,17 +247,19 @@ def Mouth():
                     cv,
                     v=(round(((float(len(cvs)) - index) ** 3) / (len(cvs) ** 3), 4)),
                 )
-
             # for index, cv in enumerate(cvs):
             pmc.parent(grp, clusters)
-
+        # redundant?
+        def makeFrown():
+            return
 
         # for all 4 curves, create clusters
         for xy in zip([tr, tl, br, bl], ["TR", "TL", "BR", "BL"], [-1, -1, 1, 1]):
-            makeSmile(xy[0], xy[1])
+            # makeSmile(xy[0], xy[1])
             makeOpen(xy[0], xy[1], xy[2])
             makePurse(xy[0], xy[1])
 
+        # pmc.select(clusterOpen)
     # core of the rig happens here
     # iterate over curves top/bottom
     # make a new joint at pivot, and at each cv on the curve
@@ -335,7 +334,7 @@ def Mouth():
                 bindJt = pmc.joint(
                     p=pmc.pointPosition(locAlignPos),
                     n="bind_mouth" + name + "_" + str(index),
-                    radius=0.2,
+                    radius=0.05,
                 )
                 # allow for scaling of parent to not interfere with scaling of bindJt
                 pmc.setAttr(str(bindJt) + ".segmentScaleCompensate", 1)
@@ -360,13 +359,15 @@ def Mouth():
         pmc.xform(cc, cp=1)
         orient = pmc.orientConstraint(oriJt, cc)
         pmc.delete(orient)
-        pmc.makeIdentity(cc, s=1, t=1, apply=1)
+
+        # pmc.makeIdentity(cc, s=1, t=1, apply=1)
         pmc.move(
-            cc, [0.3, 0, 0], relative=True, objectSpace=True, worldSpaceDistance=True
+            cc, [.2, (-.1 if "bottom" in str(oriJt) else .1), 0], relative=True, objectSpace=True, worldSpaceDistance=True
         )
         pmc.makeIdentity(cc, s=1, r=1, t=1, apply=1)
         pmc.rotate(cc, [0, 90, 0])
         pmc.makeIdentity(cc, s=1, r=1, t=1, apply=1)
+        pmc.delete(cc, ch=1)
 
     #utility function that makes a cluster with a cv/cvs
     # and stores it in an offset group to remove double translations
@@ -392,7 +393,7 @@ def Mouth():
             cc = pmc.circle(
                 n="anim_cc_mouth" + str(name) + "_" + str(index),
                 c=pmc.pointPosition(cv),
-                r=0.15,
+                r=0.035,
             )[0]
 
             # define joint whose orienatation it should match
@@ -463,7 +464,7 @@ def Mouth():
             cornerJoint = pmc.joint(
                 n="bind_" + name + "_mouthCorner01",
                 p=pmc.pointPosition(top[loc]),
-                radius=0.4,
+                radius=0.1,
             )
             # orient to match locator
             orientL = pmc.orientConstraint(
@@ -482,9 +483,9 @@ def Mouth():
             pmc.parent(jtOriL, pivotJoint)
             # make cc
             ccL = pmc.circle(
-                n="anim_" + name + "_mouthCorner01",
+                n="anim_" +  name + "_mouthCorner01",
                 c=pmc.pointPosition(top[loc]),
-                r=0.3,
+                r=0.15,
             )[0]
             oriJtL = pmc.ls("jtOri_" + name + "_corner01")
             # for some reason, makeCC didnt work with one of these, so ive had to include it longhand
@@ -560,7 +561,7 @@ def Mouth():
             pmc.select(ccL)
             pmc.addAttr( longName='Purse', defaultValue=1.0, minValue=0, maxValue=1, h=0, k=1, r=1, w=1 )
             ccL.attr('Purse').set(0)
-            pmc.transformLimits(ccL, tz = (lz, 0), etz =(1,1))
+            # pmc.transformLimits(ccL, tz = (lz, 0), etz =(1,1))
 
             # Set driven keys binding tZ to scale z and tx to scale x
             # translate cc controls the scale of the bshp driver curves
@@ -575,20 +576,18 @@ def Mouth():
             # setting the scale Z sriven curve to have a general parabola that more accurately follows translate of ccL
             pmc.select(bottomBshp)
             pmc.selectKey( str(bottomBshp), time=(lz-cz), attribute='scaleZ') 
-            pmc.setInfinity(poi="linear")
             pmc.keyTangent(outAngle="3.5")
             pmc.selectKey( str(bottomBshp), time=(0), attribute='scaleZ') 
             pmc.keyTangent(itt="flat")
-            pmc.setInfinity(poi="linear")
+            pmc.setInfinity(poi="constant")
 
 
             pmc.select(topBshp)
             pmc.selectKey( str(topBshp), time=(lz-cz), attribute='scaleZ') 
-            pmc.setInfinity(poi="linear")
             pmc.keyTangent(outAngle="3.5")
             pmc.selectKey( str(topBshp), time=(0), attribute='scaleZ') 
             pmc.keyTangent(itt="flat")
-            pmc.setInfinity(poi="linear")
+            pmc.setInfinity(poi="constant")
             
             # after all driven keys have been set, return CCl to 0
             pmc.move(0, 0, 0, ccL, ws = 1)
@@ -644,7 +643,7 @@ def Mouth():
         pmc.orientConstraint(jointsOffset, publicJaw, joints)
 
     # utility function run 1x per joint to generate the node daisy chain that controls the scale
-    def connectZScale(child, parent, target, purse):
+    def connectZScale(child, parent, target, purse, decomp):
         # based off the base equation (parent - child) / child * purse + 1 
         target = pmc.ls(target)[0]
 
@@ -677,20 +676,31 @@ def Mouth():
         divA.attr("input2X").set(float(childD.getAttr("distance")))
         subNodePassover.attr("input1D[1]").set(float(childD.getAttr("distance")))
 
+        multA = pmc.shadingNode('multiplyDivide', au = 1, n = "multA_" + str(target))
         multB = pmc.shadingNode('multiplyDivide', au = 1, n = "multB_" + str(target))
-        addA = pmc.shadingNode('plusMinusAverage', au = 1, n = "a_" + str(target))
+        addA = pmc.shadingNode('plusMinusAverage', au = 1, n = "add_" + str(target))
         pmc.connectAttr(str(subNodePassover)+'.output1D' ,str(divA) + ".input1X")
-        pmc.connectAttr(str(divA)+'.outputX' ,str(multB) + ".input1X")
-        pmc.connectAttr(str(purse)+'.Purse' ,str(multB) + ".input2X")
-        pmc.connectAttr(str(multB) + '.outputX', str(addA)+ ".input1D[0]")
+        pmc.connectAttr(str(divA)+'.outputX' ,str(multA) + ".input1X")
+        pmc.connectAttr(str(purse)+'.Purse' ,str(multA) + ".input2X")
+        pmc.connectAttr(str(multA) + '.outputX', str(addA)+ ".input1D[0]")
+        pmc.connectAttr(str(decomp)+".outputScale", str(multB)+ ".input2")
         addA.attr('input1D[1]').set(1)
+        multB.attr('operation').set(2)
         pmc.delete(childD)
+        pmc.transformLimits(parent, sx = (1, 2), esx=(1,0))
+        multB.attr("isHistoricallyInteresting").set(0)
+        multA.attr("isHistoricallyInteresting").set(0)
+        addA.attr("isHistoricallyInteresting").set(0)
 
         # finally, drive the scale of parentX by the expression modified by Purse on the CCL
-        pmc.connectAttr( str(addA) + ".output1D" ,str(parent)+".scaleX")
+        pmc.connectAttr( str(addA) + ".output1D" ,str(multB)+".input1X")
+        pmc.connectAttr( str(multB) + ".outputX" ,str(parent)+".scaleX")
         
     # Handles the connection to the scaling of the bind joints parent, allowing the mouth to deviate from the initial muzzle shape
     def handleZ():
+        decomp = pmc.createNode("decomposeMatrix")
+        pmc.connectAttr("grpTranslate_mouthRig01.matrix", str(decomp) + ".inputMatrix")
+
         # select all bind joints
         bindJts = pmc.ls("bind*_mouth*", flatten=1, type="joint")
         # for each bind joint, select parent, child, driving locator, and driving cc
@@ -707,13 +717,14 @@ def Mouth():
             parent = pmc.pickWalk(direction="up")[0]
             [lx, ly, lz] = pmc.xform(joint, q=1,t=1,  ws=1)
             purse = 'anim_r_mouthCorner01' if lx >= 0 else "anim_l_mouthCorner01"
-            connectZScale(joint, parent, target, purse)
+            connectZScale(joint, parent, target, purse, decomp)
             
 
 
 
     makeDrivers(top, bottom)
     makeShapeClusters()
+
 
     topCorners = makeJoints(top, "_top")
     bottomCorners = makeJoints(bottom, "_bottom")
@@ -725,9 +736,10 @@ def Mouth():
     handleCorners(topCorners, bottomCorners)
 
     handleZ()
+    pmc.select("clusterDriver_mouth_open01Handle")
 
 
-    print("Mouth Complete")
+    # print("Mouth Complete")
     
 
 
