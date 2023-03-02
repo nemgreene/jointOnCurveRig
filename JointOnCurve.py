@@ -240,6 +240,8 @@ def Mouth():
                 cvs,
                 ("clusterDriver_mouth" + name + "_smile01"),
             )
+            # print(cluster[0], name)
+            pmc.transformLimits(cluster[1], tx = (0, 0) , etx =((0,1) if "L" in name else (1, 0)) )
             # loosely exponential increase in weight transformed to [0-1] space
             for index, cv in enumerate(cvs):
                 pmc.percent(
@@ -249,13 +251,10 @@ def Mouth():
                 )
             # for index, cv in enumerate(cvs):
             pmc.parent(grp, clusters)
-        # redundant?
-        def makeFrown():
-            return
 
         # for all 4 curves, create clusters
         for xy in zip([tr, tl, br, bl], ["TR", "TL", "BR", "BL"], [-1, -1, 1, 1]):
-            # makeSmile(xy[0], xy[1])
+            makeSmile(xy[0], xy[1])
             makeOpen(xy[0], xy[1], xy[2])
             makePurse(xy[0], xy[1])
 
@@ -561,6 +560,7 @@ def Mouth():
             pmc.select(ccL)
             pmc.addAttr( longName='Purse', defaultValue=1.0, minValue=0, maxValue=1, h=0, k=1, r=1, w=1 )
             ccL.attr('Purse').set(0)
+            # print(ccL)
             # pmc.transformLimits(ccL, tz = (lz, 0), etz =(1,1))
 
             # Set driven keys binding tZ to scale z and tx to scale x
@@ -608,6 +608,8 @@ def Mouth():
             'scaleX',  k=1 )
             pmc.keyTangent(itt="linear", ott="linear")
             pmc.move(0, 0, 0, ccL, ws = 1)
+
+            pmc.parent(ccL, target)
 
         abstract("r")
         abstract("l")
@@ -687,7 +689,7 @@ def Mouth():
         addA.attr('input1D[1]').set(1)
         multB.attr('operation').set(2)
         pmc.delete(childD)
-        pmc.transformLimits(parent, sx = (1, 2), esx=(1,0))
+        # pmc.transformLimits(parent, sx = (1, 2), esx=(1,0))
         multB.attr("isHistoricallyInteresting").set(0)
         multA.attr("isHistoricallyInteresting").set(0)
         addA.attr("isHistoricallyInteresting").set(0)
@@ -739,7 +741,7 @@ def Mouth():
     pmc.select("clusterDriver_mouth_open01Handle")
 
 
-    # print("Mouth Complete")
+    print("Mouth Complete")
     
 
 
