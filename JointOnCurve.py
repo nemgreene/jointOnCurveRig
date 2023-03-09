@@ -250,34 +250,34 @@ def Mouth():
         pmc.rotate(openGroup, alpha, 0, 0, r=1)
         # Open shape is now in place
         # cluster/offset all for the mouth open
-        # grpOpen, clusterOpen = clusterAndOffset(
-        #     [BL, BR, TL, TR],
-        #     ("clusterDriver_mouthOpen01"),
-        # )
+        grpOpen, clusterOpen = clusterAndOffset(
+            [BL, BR, TL, TR],
+            ("clusterDriver_mouthOpen01"),
+        )
 
 
         # subroutine to set the cluster weights for opening the mouth using clusterOPen
         # def makeOpen(curve, name, offset):
         def makeOpen(curve, name, driver, offset):
             cvs = len(pmc.ls(str(curve + ".cv[*]"), flatten=1))
-            pmc.rebuildCurve(driver, s=0, ch=0, rpo=1, rt=0, end=1, kr=1, kcp=0, kep=1, kt=0, d=3, tol=.01)
-            pmc.rebuildCurve(driver, s=cvs-1, ch=0, rpo=1, rt=0, end=1, kr=1, kcp=0, kep=1, kt=1, d=2, tol=.01)
-            pmc.rebuildCurve(driver, s=cvs-1, ch=0, rpo=1, rt=0, end=1, kr=1, kcp=0, kep=1, kt=1, d=1, tol=.01)
-            pmc.blendShape(driver, curve, origin="world", n = "bshpDriver_mouthOpen_" + name)
+            pmc.rebuildCurve(driver, s=0, ch=1, rpo=1, rt=0, end=1, kr=1, kcp=0, kep=1, kt=1, d=3, tol=.01)
+            pmc.rebuildCurve(driver, s=cvs-1, ch=1, rpo=1, rt=0, end=1, kr=1, kcp=0, kep=1, kt=1, d=2, tol=.01)
+            pmc.rebuildCurve(driver, s=cvs-1, ch=1, rpo=1, rt=0, end=1, kr=1, kcp=0, kep=1, kt=1, d=1, tol=.01)
+            blend = pmc.blendShape(driver, curve, origin="world", n = "bshpDriver_mouthOpen_" + name)
 
-            range = pmc.shadingNode('setRange', au=1, n = "rangeDriver_mouthOpen01")
+            range = pmc.shadingNode('setRange', au=1)
             range.attr("minX").set(1)
             range.attr("maxX").set(0)
             range.attr("oldMinX").set((90 - alpha) * -2)
             range.attr("oldMaxX").set(0)
 
-            pmc.connectAttr(str(publicJaw) + ".rotateX", str(range) + ".valueX")
-            pmc.connectAttr(str(publicJaw) + ".rotateX", str(range) + ".valueY")
-
-
+            pmc.connectAttr(str(publicJaw) + ".rotate", str(range) + ".value")
+            pmc.select([range, publicJaw, blend], add=1 )
+            pmc.connectAttr(str(range)+'.outValueX', str(blend[0]) + ".ccDriver_mouthOpen_"+name+"_01" , f=1)
 
 
             # cvs = pmc.ls(str(driver[0]) + ".cv[*]", flatten=1)
+            # print("title", driver, len(cvs))
             # for index, cv in enumerate(cvs):
             #     pmc.percent(
             #         clusterOpen[0],
@@ -325,12 +325,11 @@ def Mouth():
         # for all 4 curves, create clusters
         # for xy in zip([tr, tl, br, bl], ["TR", "TL", "BR", "BL"], [-1, -1, 1, 1]):
         for xy in zip([tr, tl, br, bl], ["TR", "TL", "BR", "BL"], [TR, [TL], BR, BL], [-1, -1, 1, 1]):
-            shape = pmc.listRelatives(xy[2], shapes = 1)[0]
+            print(xy[2])
             makeOpen(xy[0], xy[1], xy[2], xy[3])
             makePurse(xy[0], xy[1])
             makeSmile(xy[0], xy[1])
 
-        pmc.makeIdentity(openGroup, a=1, s=1 )
         # pmc.select(clusterOpen)
     # core of the rig happens here
     # iterate over curves top/bottom
@@ -718,6 +717,7 @@ def Mouth():
     def bindOpening():
         # Need to bind publicJaw rotation to jaw pivot as a temp
         # pmc.connectAttr()
+        # print(pivot, publicJaw)
         # pmc.connectAttr(str(jaw)+".r", str(publicJaw) + '.r')
 
         mult = pmc.shadingNode('multiplyDivide', au=1, n="mult_mouthOpenDriver01")
@@ -838,16 +838,16 @@ def Mouth():
     makeShapeClusters()
 
 
-    # topCorners = makeJoints(top, "_top")
-    # bottomCorners = makeJoints(bottom, "_bottom")
+    topCorners = makeJoints(top, "_top")
+    bottomCorners = makeJoints(bottom, "_bottom")
 
-    # ccGenerator(top, "_top")
-    # ccGenerator(bottom, "_bottom")
+    ccGenerator(top, "_top")
+    ccGenerator(bottom, "_bottom")
 
-    # bindOpening()
-    # handleCorners(topCorners, bottomCorners)
+    bindOpening()
+    handleCorners(topCorners, bottomCorners)
 
-    # # handleZ()
+    handleZ()
     # pmc.select("clusterDriver_mouthOpen01Handle")
 
 
